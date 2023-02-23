@@ -941,7 +941,7 @@ bl_info = {
 }
 
 class ObjectCursorArray(bpy.types.Operator):
-    """Object Cursor Array"""
+    """Multi-contour extrusion"""
     bl_idname = "object.multi_cont_extrusion"
     bl_label = "Multi-contour extrusion"
     bl_options = {'REGISTER', 'UNDO'}
