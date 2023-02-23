@@ -43,5 +43,5 @@ Angles alpha0 and alpha1 control the tendency of the tube to shrink or to widen 
 * in "experimental" mode avoid contours with dramatic changes in seeding e.g. when starting contour has very long edges ending contour is evenly seed for certain path curvature newly inserted mesh veritves will drop off the surface and produce steps.
 * consider creting tube segment by segment to control slope with alpha0 and alpha1, tube perfectly match given contours so after "joining" and removing doubles for final object you supposed to get custom sloped tube.
 * one interesting paradox that is not evident:
-![This is an image](theparadox.png)
+![This is an image](the_paradox.png)
 what is happening is wrong detection of closest vertex of the first contour to the path. due to the shape of contour it detects oppsote vertex so starting and ending contours become twisted. the solution is to carefully check seeding, in this particular example long edge have to be subdivided.
