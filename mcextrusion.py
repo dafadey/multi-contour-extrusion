@@ -14,6 +14,15 @@ class interval:
       self.left=[0, 0] #index of left edge, 0-bottom contour, 1-top contour
       self.right=[0, 0] #index of rigth edge, 0-bttom contour, 1-top contour
 
+def get_bleder_ver() :
+  sver=''
+  for c in bpy.app.version_string:
+    if c == ' ' :
+      break
+    if c != '.' :
+      sver = sver + c
+  return int(sver)
+
 def connect_intervals_simple(intervals0):
   indexes=[]
   i0_stride=0
@@ -313,6 +322,12 @@ def subdivide(s, n_desired, accurate=True):
   return s_sub
 
 def get_ordered_verts(obj):
+  if get_bleder_ver() <= 279 :
+    return get_ordered_verts_279(obj)
+  else :
+    return get_ordered_verts_280(obj)
+
+def get_ordered_verts_279(obj):
   cont = []
   if obj.data.bl_rna == bpy.types.Curve.bl_rna :
     #print("obj is spline")
@@ -334,6 +349,39 @@ def get_ordered_verts(obj):
       cont.append(obj.matrix_world * vp.co)
       while v != v0:
         cont.append(obj.matrix_world * v.co)
+        nextV = v.link_edges[0].other_vert(v)
+        if len(v.link_edges) == 1:
+          break
+        if nextV == vp:
+          nextV = v.link_edges[1].other_vert(v)
+        vp = v
+        v = nextV
+      break
+    bm.free()
+  return cont
+
+def get_ordered_verts_280(obj):
+  cont = []
+  if obj.data.bl_rna == bpy.types.Curve.bl_rna :
+    #print("obj is spline")
+    spl=obj.data.splines[0]
+    minus_one = -1 if spl.use_cyclic_u == False else 0
+    for sid in range(0, len(spl.bezier_points) + minus_one):
+      sid_next = (sid + 1 ) % len(spl.bezier_points)
+      seg_points = mathutils.geometry.interpolate_bezier(obj.matrix_world @ spl.bezier_points[sid].co, obj.matrix_world @ spl.bezier_points[sid].handle_right, obj.matrix_world @ spl.bezier_points[sid_next].handle_left, obj.matrix_world @ spl.bezier_points[sid_next].co, spl.resolution_u)     
+      for pid in range(0,len(seg_points)+(-1 if sid != len(spl.bezier_points)-2 else 0)):
+        cont.append(seg_points[pid])
+    
+  else :
+    #print("obj is mesh")
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    for v0 in bm.verts:
+      vp=v0
+      v=v0.link_edges[0].other_vert(v0)
+      cont.append(obj.matrix_world @ vp.co)
+      while v != v0:
+        cont.append(obj.matrix_world @ v.co)
         nextV = v.link_edges[0].other_vert(v)
         if len(v.link_edges) == 1:
           break
@@ -685,8 +733,11 @@ def make_tube(contours, seam, alpha0_deg=None, in_local_space=True, alpha1_deg=N
 
     mesh = bpy.data.meshes.new("mesh")
     target = bpy.data.objects.new("multi-contour_sweep", mesh)
-    bpy.context.scene.objects.link(target)
-      
+    if get_bleder_ver() <= 279 :
+      bpy.context.scene.objects.link(target)    
+    else :
+      bpy.context.collection.objects.link(target)
+            
     bm.to_mesh(mesh)  
     bm.free()
 
@@ -929,7 +980,10 @@ def make_tube_experimental(contours, seam, in_local_space=True, alpha0_deg=None,
       #break    
     tube_mesh = bpy.data.meshes.new("mesh")
     target = bpy.data.objects.new("multi-contour_sweep_exp", tube_mesh)
-    bpy.context.scene.objects.link(target)    
+    if get_bleder_ver() <= 279 :
+      bpy.context.scene.objects.link(target)    
+    else :
+      bpy.context.collection.objects.link(target)
     bm.to_mesh(tube_mesh)  
     bm.free()
 
@@ -940,17 +994,29 @@ bl_info = {
     "category": "Object",
 }
 
-class ObjectCursorArray(bpy.types.Operator):
+def register_member(var, value) :
+    operator=" = " if get_bleder_ver()<= 279 else " : "
+    try:
+        code=compile(var+operator+value,"","exec")
+    except SyntaxError:
+        code=compile(var+operator+value,"","exec")
+    return code
+
+class MCE(bpy.types.Operator):
     """Multi-contour extrusion"""
     bl_idname = "object.multi_cont_extrusion"
     bl_label = "Multi-contour extrusion"
     bl_options = {'REGISTER', 'UNDO'}
 
-    exp = bpy.props.BoolProperty(name="experimental", description="extrusion for contours with different number of vertices", default=False)
-    lin = bpy.props.BoolProperty(name="linear", description="linear/spline connection between contours", default=False)
-    loc = bpy.props.BoolProperty(name="local", description="connect contours in local space", default=True)
-    alpha0 = bpy.props.FloatProperty(name="alpha0", description="initial angle", default = 0)
-    alpha1 = bpy.props.FloatProperty(name="alpha1", description="final angle", default = 0)
+    exec(register_member("exp", """bpy.props.BoolProperty(name="experimental", description="extrusion for contours with different number of vertices", default=False)"""))
+    
+    exec(register_member("lin", """bpy.props.BoolProperty(name="linear", description="linear/spline connection between contours", default=False)"""))
+    
+    exec(register_member("loc", """bpy.props.BoolProperty(name="local", description="connect contours in local space", default=True)"""))
+
+    exec(register_member("alpha0", """bpy.props.FloatProperty(name="alpha0", description="initial angle", default = 0)"""))
+    
+    exec(register_member("alpha1", """bpy.props.FloatProperty(name="alpha1", description="final angle", default = 0)"""))
 
     def execute(self, context):
       conts = []
@@ -967,16 +1033,15 @@ class ObjectCursorArray(bpy.types.Operator):
 
       return {'FINISHED'}
 
-
 def menu_func(self, context):
-    self.layout.operator(ObjectCursorArray.bl_idname)
+  self.layout.operator(MCE.bl_idname)
 
 # store keymaps here to access after registration
 addon_keymaps = []
 
 
 def register():
-    bpy.utils.register_class(ObjectCursorArray)
+    bpy.utils.register_class(MCE)
     bpy.types.VIEW3D_MT_object.append(menu_func)
 
     # handle the keymap
@@ -986,7 +1051,7 @@ def register():
     kc = wm.keyconfigs.addon
     if kc:
         km = wm.keyconfigs.addon.keymaps.new(name='Object Mode', space_type='EMPTY')
-        kmi = km.keymap_items.new(ObjectCursorArray.bl_idname, 'SPACE', 'PRESS', ctrl=True, shift=True)
+        kmi = km.keymap_items.new(MCE.bl_idname, 'SPACE', 'PRESS', ctrl=True, shift=True)
         #kmi.properties.total = 4
         addon_keymaps.append((km, kmi))
 
@@ -998,7 +1063,8 @@ def unregister():
         km.keymap_items.remove(kmi)
     addon_keymaps.clear()
 
-    bpy.utils.unregister_class(ObjectCursorArray)
+    bpy.utils.unregister_class(MCE)
+      
     bpy.types.VIEW3D_MT_object.remove(menu_func)
 
 
