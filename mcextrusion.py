@@ -992,6 +992,7 @@ def make_tube_experimental(contours, seam, in_local_space=True, alpha0_deg=None,
 bl_info = {
     "name": "Multi-contour extrusion",
     "category": "Object",
+    "blender" : (2, 80, 0),
 }
 
 def register_member(var, value) :
